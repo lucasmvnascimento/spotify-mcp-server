@@ -277,15 +277,27 @@ const getPlaylistTracks: tool<{
   handler: async (args, _extra: SpotifyHandlerExtra) => {
     const { playlistId, limit = 50, offset = 0 } = args;
 
-    const playlistTracks = await handleSpotifyRequest(async (spotifyApi) => {
-      return await spotifyApi.playlists.getPlaylistItems(
-        playlistId,
-        undefined,
-        undefined,
-        limit as MaxInt<50>,
-        offset,
-      );
-    });
+    let playlistTracks: any;
+    try {
+      playlistTracks = await handleSpotifyRequest(async (spotifyApi) => {
+        return await spotifyApi.playlists.getPlaylistItems(
+          playlistId,
+          undefined,
+          undefined,
+          limit as MaxInt<50>,
+          offset,
+        );
+      });
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error fetching playlist tracks: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
 
     if ((playlistTracks.items?.length ?? 0) === 0) {
       return {
@@ -299,8 +311,8 @@ const getPlaylistTracks: tool<{
     }
 
     const formattedTracks = playlistTracks.items
-      .map((item, i) => {
-        const { track } = item;
+      .map((item: any, i: number) => {
+        const track = item.item ?? item.track;
         if (!track) return `${offset + i + 1}. [Removed track]`;
 
         if (isTrack(track)) {
