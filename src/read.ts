@@ -641,7 +641,7 @@ const removeUsersSavedTracks: tool<{
     try {
       // Ensure token is fresh (handles auto-refresh if needed)
       await createSpotifyApi();
-      const config = loadSpotifyConfig();
+      const config = await loadSpotifyConfig();
 
       const uris = trackIds.map((id) => `spotify:track:${id}`).join(',');
       const response = await fetch(

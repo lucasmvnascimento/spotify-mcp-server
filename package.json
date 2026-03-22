@@ -8,17 +8,21 @@
   },
   "scripts": {
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "start": "node build/server.js",
     "auth": "tsc && node build/auth.js",
     "lint": "biome check --diagnostic-level=warn --error-on-warnings",
     "lint:fix": "biome check --write --unsafe --organize-imports-enabled=true",
     "typecheck": "tsc --noEmit",
     "postinstall": "sed -i '' 's|this.postRequest(`users/${user_id}/playlists`|this.postRequest(`me/playlists`|g' node_modules/@spotify/web-api-ts-sdk/dist/mjs/endpoints/PlaylistsEndpoints.js node_modules/@spotify/web-api-ts-sdk/dist/cjs/endpoints/PlaylistsEndpoints.js && sed -i '' 's|playlists/${playlist_id}/tracks|playlists/${playlist_id}/items|g' node_modules/@spotify/web-api-ts-sdk/dist/mjs/endpoints/PlaylistsEndpoints.js node_modules/@spotify/web-api-ts-sdk/dist/cjs/endpoints/PlaylistsEndpoints.js"
   },
-  "files": ["build"],
+  "files": [
+    "build"
+  ],
   "keywords": [],
   "author": "Marcel Marais",
   "description": "A Model Context Protocol server for Spotify integration",
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1014.0",
     "@modelcontextprotocol/sdk": "^1.10.1",
     "@spotify/web-api-ts-sdk": "^1.2.0",
     "open": "^10.1.0",

@@ -3,11 +3,18 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { URL, fileURLToPath } from 'node:url';
+import {
+  GetSecretValueCommand,
+  SecretsManagerClient,
+  UpdateSecretCommand,
+} from '@aws-sdk/client-secrets-manager';
 import { SpotifyApi } from '@spotify/web-api-ts-sdk';
 import open from 'open';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_FILE = path.join(__dirname, '../spotify-config.json');
+const SECRET_ID = process.env.SECRET_ID ?? 'spotify-mcp/config';
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 export interface SpotifyConfig {
   clientId: string;
@@ -15,41 +22,52 @@ export interface SpotifyConfig {
   redirectUri: string;
   accessToken?: string;
   refreshToken?: string;
-  expiresAt?: number; // Unix timestamp in milliseconds
+  expiresAt?: number;
+  apiKey?: string;
 }
 
-export function loadSpotifyConfig(): SpotifyConfig {
+let secretsClient: SecretsManagerClient | null = null;
+function getSecretsClient() {
+  if (!secretsClient) secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
+  return secretsClient;
+}
+
+export async function loadSpotifyConfig(): Promise<SpotifyConfig> {
+  if (IS_PROD) {
+    const res = await getSecretsClient().send(new GetSecretValueCommand({ SecretId: SECRET_ID }));
+    const config = JSON.parse(res.SecretString!);
+    if (!(config.clientId && config.clientSecret)) {
+      throw new Error('Spotify configuration must include clientId and clientSecret.');
+    }
+    return config;
+  }
+
   if (!fs.existsSync(CONFIG_FILE)) {
     throw new Error(
       `Spotify configuration file not found at ${CONFIG_FILE}. Please create one with clientId, clientSecret, and redirectUri.`,
     );
   }
-
-  try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    if (!(config.clientId && config.clientSecret && config.redirectUri)) {
-      throw new Error(
-        'Spotify configuration must include clientId, clientSecret, and redirectUri.',
-      );
-    }
-    return config;
-  } catch (error) {
-    throw new Error(
-      `Failed to parse Spotify configuration: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
+  const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+  if (!(config.clientId && config.clientSecret && config.redirectUri)) {
+    throw new Error('Spotify configuration must include clientId, clientSecret, and redirectUri.');
   }
+  return config;
 }
 
-export function saveSpotifyConfig(config: SpotifyConfig): void {
+export async function saveSpotifyConfig(config: SpotifyConfig): Promise<void> {
+  if (IS_PROD) {
+    await getSecretsClient().send(
+      new UpdateSecretCommand({ SecretId: SECRET_ID, SecretString: JSON.stringify(config) }),
+    );
+    return;
+  }
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
 }
 
 let cachedSpotifyApi: SpotifyApi | null = null;
 
 export async function createSpotifyApi(): Promise<SpotifyApi> {
-  const config = loadSpotifyConfig();
+  const config = await loadSpotifyConfig();
 
   if (config.accessToken && config.refreshToken) {
     const now = Date.now();
@@ -63,7 +81,7 @@ export async function createSpotifyApi(): Promise<SpotifyApi> {
         const tokens = await refreshAccessToken(config);
         config.accessToken = tokens.access_token;
         config.expiresAt = now + tokens.expires_in * 1000; // Convert seconds to milliseconds
-        saveSpotifyConfig(config);
+        await saveSpotifyConfig(config);
         console.log('Access token refreshed successfully');
 
         // Clear cached API instance to force recreation with new token
@@ -192,7 +210,7 @@ async function refreshAccessToken(
 }
 
 export async function authorizeSpotify(): Promise<void> {
-  const config = loadSpotifyConfig();
+  const config = await loadSpotifyConfig();
 
   const redirectUri = new URL(config.redirectUri);
   if (
@@ -293,8 +311,8 @@ export async function authorizeSpotify(): Promise<void> {
 
           config.accessToken = tokens.access_token;
           config.refreshToken = tokens.refresh_token;
-          config.expiresAt = Date.now() + tokens.expires_in * 1000; // Convert seconds to milliseconds
-          saveSpotifyConfig(config);
+          config.expiresAt = Date.now() + tokens.expires_in * 1000;
+          await saveSpotifyConfig(config);
 
           res.end(
             '<html><body><h1>Authentication Successful!</h1><p>You can now close this window and return to the application.</p></body></html>',
