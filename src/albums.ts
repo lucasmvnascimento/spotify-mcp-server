@@ -7,19 +7,21 @@ async function spotifyAlbumRequest(
   method: 'PUT' | 'DELETE',
   albumIds: string[],
 ): Promise<void> {
-  const config = await loadSpotifyConfig();
-  const response = await fetch('https://api.spotify.com/v1/me/albums', {
-    method,
-    headers: {
-      Authorization: `Bearer ${config.accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ ids: albumIds }),
+  await handleSpotifyRequest(async (_spotifyApi) => {
+    const config = await loadSpotifyConfig();
+    const response = await fetch('https://api.spotify.com/v1/me/albums', {
+      method,
+      headers: {
+        Authorization: `Bearer ${config.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: albumIds }),
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Spotify API error: ${err}`);
+    }
   });
-  if (!response.ok && response.status !== 200) {
-    const err = await response.text();
-    throw new Error(`Spotify API error: ${err}`);
-  }
 }
 
 const getAlbums: tool<{
