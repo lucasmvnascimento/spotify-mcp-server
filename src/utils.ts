@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -28,16 +29,23 @@ export interface SpotifyConfig {
 
 let secretsClient: SecretsManagerClient | null = null;
 function getSecretsClient() {
-  if (!secretsClient) secretsClient = new SecretsManagerClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
+  if (!secretsClient)
+    secretsClient = new SecretsManagerClient({
+      region: process.env.AWS_REGION ?? 'us-east-1',
+    });
   return secretsClient;
 }
 
 export async function loadSpotifyConfig(): Promise<SpotifyConfig> {
   if (IS_PROD) {
-    const res = await getSecretsClient().send(new GetSecretValueCommand({ SecretId: SECRET_ID }));
+    const res = await getSecretsClient().send(
+      new GetSecretValueCommand({ SecretId: SECRET_ID }),
+    );
     const config = JSON.parse(res.SecretString!);
     if (!(config.clientId && config.clientSecret)) {
-      throw new Error('Spotify configuration must include clientId and clientSecret.');
+      throw new Error(
+        'Spotify configuration must include clientId and clientSecret.',
+      );
     }
     return config;
   }
@@ -49,7 +57,9 @@ export async function loadSpotifyConfig(): Promise<SpotifyConfig> {
   }
   const config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
   if (!(config.clientId && config.clientSecret && config.redirectUri)) {
-    throw new Error('Spotify configuration must include clientId, clientSecret, and redirectUri.');
+    throw new Error(
+      'Spotify configuration must include clientId, clientSecret, and redirectUri.',
+    );
   }
   return config;
 }
@@ -57,7 +67,10 @@ export async function loadSpotifyConfig(): Promise<SpotifyConfig> {
 export async function saveSpotifyConfig(config: SpotifyConfig): Promise<void> {
   if (IS_PROD) {
     await getSecretsClient().send(
-      new UpdateSecretCommand({ SecretId: SECRET_ID, SecretString: JSON.stringify(config) }),
+      new UpdateSecretCommand({
+        SecretId: SECRET_ID,
+        SecretString: JSON.stringify(config),
+      }),
     );
     return;
   }
@@ -66,7 +79,13 @@ export async function saveSpotifyConfig(config: SpotifyConfig): Promise<void> {
 
 let cachedSpotifyApi: SpotifyApi | null = null;
 
+// Per-request SpotifyApi override (used for OAuth sessions)
+export const spotifyApiContext = new AsyncLocalStorage<SpotifyApi>();
+
 export async function createSpotifyApi(): Promise<SpotifyApi> {
+  // If a per-request API is set (OAuth flow), use it
+  const contextApi = spotifyApiContext.getStore();
+  if (contextApi) return contextApi;
   const config = await loadSpotifyConfig();
 
   if (config.accessToken && config.refreshToken) {
@@ -74,7 +93,7 @@ export async function createSpotifyApi(): Promise<SpotifyApi> {
     const shouldRefresh = !config.expiresAt || config.expiresAt <= now;
 
     if (shouldRefresh) {
-      console.log(
+      console.error(
         'Access token expired or missing expiration time, refreshing...',
       );
       try {
@@ -82,7 +101,7 @@ export async function createSpotifyApi(): Promise<SpotifyApi> {
         config.accessToken = tokens.access_token;
         config.expiresAt = now + tokens.expires_in * 1000; // Convert seconds to milliseconds
         await saveSpotifyConfig(config);
-        console.log('Access token refreshed successfully');
+        console.error('Access token refreshed successfully');
 
         // Clear cached API instance to force recreation with new token
         cachedSpotifyApi = null;
