@@ -13,7 +13,7 @@
     "lint": "biome check --diagnostic-level=warn --error-on-warnings",
     "lint:fix": "biome check --write --unsafe --organize-imports-enabled=true",
     "typecheck": "tsc --noEmit",
-    "postinstall": "sed -i '' 's|this.postRequest(`users/${user_id}/playlists`|this.postRequest(`me/playlists`|g' node_modules/@spotify/web-api-ts-sdk/dist/mjs/endpoints/PlaylistsEndpoints.js node_modules/@spotify/web-api-ts-sdk/dist/cjs/endpoints/PlaylistsEndpoints.js && sed -i '' 's|playlists/${playlist_id}/tracks|playlists/${playlist_id}/items|g' node_modules/@spotify/web-api-ts-sdk/dist/mjs/endpoints/PlaylistsEndpoints.js node_modules/@spotify/web-api-ts-sdk/dist/cjs/endpoints/PlaylistsEndpoints.js"
+    "postinstall": "sed -i$([ \"$(uname)\" = \"Darwin\" ] && echo \" ''\") 's|this.postRequest(`users/${user_id}/playlists`|this.postRequest(`me/playlists`|g' node_modules/@spotify/web-api-ts-sdk/dist/mjs/endpoints/PlaylistsEndpoints.js node_modules/@spotify/web-api-ts-sdk/dist/cjs/endpoints/PlaylistsEndpoints.js && sed -i$([ \"$(uname)\" = \"Darwin\" ] && echo \" ''\") 's|playlists/${playlist_id}/tracks|playlists/${playlist_id}/items|g' node_modules/@spotify/web-api-ts-sdk/dist/mjs/endpoints/PlaylistsEndpoints.js node_modules/@spotify/web-api-ts-sdk/dist/cjs/endpoints/PlaylistsEndpoints.js"
   },
   "files": [
     "build"
