@@ -1,7 +1,26 @@
 import type { MaxInt } from '@spotify/web-api-ts-sdk';
 import { z } from 'zod';
 import type { SpotifyHandlerExtra, tool } from './types.js';
-import { formatDuration, handleSpotifyRequest } from './utils.js';
+import { formatDuration, handleSpotifyRequest, loadSpotifyConfig } from './utils.js';
+
+async function spotifyAlbumRequest(
+  method: 'PUT' | 'DELETE',
+  albumIds: string[],
+): Promise<void> {
+  const config = await loadSpotifyConfig();
+  const response = await fetch('https://api.spotify.com/v1/me/albums', {
+    method,
+    headers: {
+      Authorization: `Bearer ${config.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ ids: albumIds }),
+  });
+  if (!response.ok && response.status !== 200) {
+    const err = await response.text();
+    throw new Error(`Spotify API error: ${err}`);
+  }
+}
 
 const getAlbums: tool<{
   albumIds: z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString>]>;
@@ -204,11 +223,7 @@ const saveOrRemoveAlbumForUser: tool<{
     }
 
     try {
-      await handleSpotifyRequest(async (spotifyApi) => {
-        return action === 'save'
-          ? await spotifyApi.currentUser.albums.saveAlbums(albumIds)
-          : await spotifyApi.currentUser.albums.removeSavedAlbums(albumIds);
-      });
+      await spotifyAlbumRequest(action === 'save' ? 'PUT' : 'DELETE', albumIds);
 
       const actionPastTense = action === 'save' ? 'saved' : 'removed';
       const preposition = action === 'save' ? 'to' : 'from';
