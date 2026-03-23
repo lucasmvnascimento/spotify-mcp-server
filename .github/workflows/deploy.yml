@@ -1,0 +1,28 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/spotify-mcp-server
+            git pull origin main
+            docker build -t spotify-mcp .
+            docker stop spotify-mcp || true
+            docker rm spotify-mcp || true
+            docker run -d \
+              --name spotify-mcp \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              -v ~/spotify-config.json:/app/spotify-config.json \
+              spotify-mcp
